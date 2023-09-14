@@ -1,0 +1,15 @@
+input InputOfOneVideo{
+    url: String!
+    startTime: String!
+    endTime: String!
+    }
+
+
+type Query{
+    helloWorld: String!
+    }
+
+
+type Mutation{
+    processVideo(user_input: [InputOfOneVideo]!): String!
+    }
