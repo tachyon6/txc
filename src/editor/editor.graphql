@@ -4,6 +4,12 @@ input InputOfOneVideo{
     endTime: String!
     }
 
+ input VideoInfos{
+    url: String!
+    startTime: Int!
+    endTime: Int!
+    }   
+
 
 type Query{
     helloWorld: String!
