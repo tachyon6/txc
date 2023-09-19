@@ -4,3 +4,9 @@ export interface InputOfOneVideo{
     startTime: string;
     endTime: string;
 }
+
+export interface VideoInfos{
+    videoId: string;
+    startTime: number;
+    endTime: number;
+}

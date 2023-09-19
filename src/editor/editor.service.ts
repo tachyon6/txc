@@ -1,15 +1,16 @@
 import { Injectable } from '@nestjs/common';
 import * as ytdl from 'ytdl-core';
 import * as fs from 'fs';
-import { InputOfOneVideo } from './editor.interface';
+import { InputOfOneVideo, VideoInfos } from './editor.interface';
 import * as ffmpeg from 'fluent-ffmpeg';
+
 
 
 @Injectable()
 export class EditorService {
     constructor() {}
 
-    async processVideo(userInputs: InputOfOneVideo[]): Promise<any> {
+    async processVideo(userInputs: InputOfOneVideo[], fileName: string): Promise<any> {
         try{
             //async download
             const downloadPromises = userInputs.map(async (input) => {
@@ -23,6 +24,7 @@ export class EditorService {
             //await all download
             await Promise.all(downloadPromises);
 
+            const videoInfos: VideoInfos[] = [];
             //async cut
             const cutPromises = userInputs.map(async (input) => {
                 const { url, startTime, endTime } = input;
@@ -31,6 +33,7 @@ export class EditorService {
                 const videoId = info.videoDetails.videoId;
                 const startTimeInSecond = timeStampToSeconds(startTime);
                 const endTimeInSecond = timeStampToSeconds(endTime);
+                videoInfos.push({videoId: videoId, startTime: startTimeInSecond, endTime: endTimeInSecond});
                 await this.cutVideo(videoId, startTimeInSecond, endTimeInSecond);
                 console.log(videoTitle + ' video cut successfully');
             });
@@ -38,18 +41,10 @@ export class EditorService {
             //await all cut
             await Promise.all(cutPromises);
 
-            const videoIds = [];
+            const outputFileName = fileName;
+            await this.mergeVideos(videoInfos, outputFileName);
 
-            //get videoIds
-            for(const input of userInputs){
-                const url = input.url;
-                const info = await ytdl.getInfo(url);
-                const videoId = info.videoDetails.videoId;
-                videoIds.push(videoId);
-            }
-            console.log(videoIds);
-
-            await this.mergeVideos(videoIds);
+            await this.deleteVideos(videoInfos, fileName);
 
             return 'success';
         } catch (err) {
@@ -95,7 +90,7 @@ export class EditorService {
                     .fps(30)
                     .setStartTime(startTime)
                     .setDuration(endTime - startTime)
-                    .output(`./videos/${videoId}_cutted.mp4`)
+                    .output(`./videos/${startTime}-${endTime}-${videoId}_cutted.mp4`)
                     .on('end', () => {
                         console.log(videoId + ' video cut completed');
                         resolve();
@@ -111,15 +106,14 @@ export class EditorService {
         }
     }
 
-    async mergeVideos(videoIds: string[]): Promise<any> {
+    async mergeVideos(videoInfos: VideoInfos[], fileName: string): Promise<any> {
         try{
             return new Promise<void>(async (resolve, reject) => {
                 const mergedVideo = await ffmpeg();
-                for (const id of videoIds) {
-                    console.log('mergeVideos() called', id);
-                    mergedVideo.addInput(`./videos/${id}_cutted.mp4`);
+                for (const info of videoInfos) {
+                    mergedVideo.addInput(`./videos/${info.startTime}-${info.endTime}-${info.videoId}_cutted.mp4`);
                 }
-                const outputFileName = './videos/output.mp4';
+                const outputFileName = `./videos/${fileName}.mp4`;
                 
                 await mergedVideo.mergeToFile(outputFileName)
                     .on('end', () => {
@@ -135,6 +129,56 @@ export class EditorService {
             throw err;
         }
     }
+
+    //delete file `./videos/${videoId}.mp4`, ${startTime+endTime+videoId}_cutted.mp4`, `./videos/${fileName}.mp4`
+    async deleteVideos(videoInfos: VideoInfos[], fileName: string): Promise<any> {
+        try{
+            const deletePromises = videoInfos.map(async (input) => {
+                const { videoId, startTime, endTime } = input;
+
+                fs.unlink(`./videos/${videoId}.mp4`, (err) => {
+                    if (err) {
+                        console.log('deleteVideos() error', err);
+                        throw err;
+                    }
+                    console.log(`./videos/${videoId}.mp4 was deleted`);
+                });
+
+                fs.unlink(`./videos/${startTime}-${endTime}-${videoId}_cutted.mp4`, (err) => {
+                    if (err) {
+                        console.log('deleteVideos() error', err);
+                        throw err;
+                    }
+                    console.log(`./videos/${startTime}-${endTime}-${videoId}_cutted.mp4 was deleted`);
+                });
+            });
+
+            await Promise.all(deletePromises);
+
+            // fs.unlink(`./videos/${fileName}.mp4`, (err) => {
+            //     if (err) {
+            //         console.log('deleteVideos() error', err);
+            //         throw err;
+            //     }
+            //     console.log(`./videos/${fileName}.mp4 was deleted`);
+            // });
+            
+        } catch(err){
+            throw err;
+        }
+    }
+
+
+
+    private sharedData: any;
+
+    setSharedData(data: any) {
+        this.sharedData = data;
+      }
+    
+      getSharedData() {
+        return this.sharedData;
+      }
 
 }
 
