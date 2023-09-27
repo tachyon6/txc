@@ -170,15 +170,15 @@ export class EditorService {
 
 
 
-    private sharedData: any;
+    // private sharedData: any;
 
-    setSharedData(data: any) {
-        this.sharedData = data;
-      }
+    // setSharedData(data: any) {
+    //     this.sharedData = data;
+    //   }
     
-      getSharedData() {
-        return this.sharedData;
-      }
+    //   getSharedData() {
+    //     return this.sharedData;
+    //   }
 
 }
 

@@ -17,9 +17,9 @@ export class EditorResolver {
     @Mutation()
     async processVideo(
         @Args('user_input') userInputs: InputOfOneVideo[],
+        outputFileName: string
     ): Promise<any> {
-        const outputFileName = `${uuid.v4()}`;
-        await this.editorService.setSharedData(outputFileName);
+        //const outputFileName = `${uuid.v4()}`;
         return await this.editorService.processVideo(userInputs, outputFileName);
     }
 
