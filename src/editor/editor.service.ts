@@ -12,37 +12,35 @@ export class EditorService {
 
     async processVideo(userInputs: InputOfOneVideo[], fileName: string): Promise<any> {
         try{
-            //async download
-            const downloadPromises = userInputs.map(async (input) => {
-                const url= input.url;
-                const info = await ytdl.getInfo(url);
-                const videoTitle = info.videoDetails.title;
-                const videoId = info.videoDetails.videoId;
-                await this.downloadYTVideo(url, videoId);
-                console.log(videoTitle, 'downloaded successfully');
-            });
-            //await all download
-            await Promise.all(downloadPromises);
-
             const videoInfos: VideoInfos[] = [];
-            //async cut
-            const cutPromises = userInputs.map(async (input) => {
+            for(const input of userInputs){
                 const { url, startTime, endTime } = input;
                 const info = await ytdl.getInfo(url);
                 const videoTitle = info.videoDetails.title;
                 const videoId = info.videoDetails.videoId;
                 const startTimeInSecond = timeStampToSeconds(startTime);
                 const endTimeInSecond = timeStampToSeconds(endTime);
-                videoInfos.push({videoId: videoId, startTime: startTimeInSecond, endTime: endTimeInSecond});
-                await this.cutVideo(videoId, startTimeInSecond, endTimeInSecond);
-                console.log(videoTitle + ' video cut successfully');
+                videoInfos.push({url, videoId, videoTitle, startTime: startTimeInSecond, endTime: endTimeInSecond});
+            }
+            console.log(videoInfos);
+            //async download
+            const downloadPromises = videoInfos.map(async (info) => {
+                await this.downloadVideo(info);
+                console.log(info.videoTitle, 'downloaded successfully');
+            });
+            //await all download
+            await Promise.all(downloadPromises);
+
+            //async cut
+            const cutPromises = videoInfos.map(async (info: VideoInfos) => {
+                await this.cutVideo(info);
+                console.log(info.videoTitle + ' video cut successfully');
             });
 
             //await all cut
             await Promise.all(cutPromises);
 
-            const outputFileName = fileName;
-            await this.mergeVideos(videoInfos, outputFileName);
+            await this.mergeVideos(videoInfos, fileName);
 
             await this.deleteVideos(videoInfos, fileName);
 
@@ -54,8 +52,9 @@ export class EditorService {
     }
 
 
-    async downloadYTVideo(url: string, videoId: string): Promise<any> {
+    async downloadVideo(info: VideoInfos): Promise<any> {
         try{
+            const{url, videoId, videoTitle, startTime, endTime} = info;
             const videoStream = await ytdl(url);
             const outputStream = fs.createWriteStream(`./videos/${videoId}.mp4`);
 
@@ -78,8 +77,9 @@ export class EditorService {
         }
     }
 
-    async cutVideo(videoId: string, startTime: number, endTime: number): Promise<any> {
+    async cutVideo(info: VideoInfos): Promise<any> {
         try{
+            const{url, videoId, videoTitle, startTime, endTime} = info;
             console.log('cutVideo() called');
             return new Promise<void>((resolve, reject) => {
                 ffmpeg(`./videos/${videoId}.mp4`)
@@ -108,14 +108,18 @@ export class EditorService {
 
     async mergeVideos(videoInfos: VideoInfos[], fileName: string): Promise<any> {
         try{
+            console.log('mergeVideos() called');
+            console.log(fileName);
             return new Promise<void>(async (resolve, reject) => {
                 const mergedVideo = await ffmpeg();
                 for (const info of videoInfos) {
-                    mergedVideo.addInput(`./videos/${info.startTime}-${info.endTime}-${info.videoId}_cutted.mp4`);
+                    console.log('for loop');
+                    const{url, videoId, videoTitle, startTime, endTime} = info;
+                    mergedVideo.input(`./videos/${startTime}-${endTime}-${videoId}_cutted.mp4`);
                 }
                 const outputFileName = `./videos/${fileName}.mp4`;
                 
-                await mergedVideo.mergeToFile(outputFileName)
+                await mergedVideo
                     .on('end', () => {
                         console.log('Merged videos');
                         resolve();
@@ -123,7 +127,8 @@ export class EditorService {
                     .on('error', (error) => {
                         console.log('mergeVideos() error', error);
                         reject(error);
-                    });
+                    })
+                    .mergeToFile(outputFileName);
             });
         } catch(err){
             throw err;
@@ -133,8 +138,8 @@ export class EditorService {
     //delete file `./videos/${videoId}.mp4`, ${startTime+endTime+videoId}_cutted.mp4`, `./videos/${fileName}.mp4`
     async deleteVideos(videoInfos: VideoInfos[], fileName: string): Promise<any> {
         try{
-            const deletePromises = videoInfos.map(async (input) => {
-                const { videoId, startTime, endTime } = input;
+            const deletePromises = videoInfos.map(async (info: VideoInfos) => {
+                const{url, videoId, videoTitle, startTime, endTime} = info;
 
                 fs.unlink(`./videos/${videoId}.mp4`, (err) => {
                     if (err) {
@@ -170,15 +175,15 @@ export class EditorService {
 
 
 
-    // private sharedData: any;
+    private sharedData: any;
 
-    // setSharedData(data: any) {
-    //     this.sharedData = data;
-    //   }
+    setSharedData(data: any) {
+        this.sharedData = data;
+      }
     
-    //   getSharedData() {
-    //     return this.sharedData;
-    //   }
+      getSharedData() {
+        return this.sharedData;
+      }
 
 }
 

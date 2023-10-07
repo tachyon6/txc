@@ -6,7 +6,9 @@ export interface InputOfOneVideo{
 }
 
 export interface VideoInfos{
+    url: string;
     videoId: string;
+    videoTitle: string;
     startTime: number;
     endTime: number;
 }

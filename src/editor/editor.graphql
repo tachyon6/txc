@@ -6,6 +6,8 @@ input InputOfOneVideo{
 
  input VideoInfos{
     url: String!
+    videoId: String!
+    videoTitle: String!
     startTime: Int!
     endTime: Int!
     }   
