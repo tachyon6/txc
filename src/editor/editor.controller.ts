@@ -1,4 +1,4 @@
-import { Controller, Get, Res } from '@nestjs/common';
+import { Controller, Get, Req, Res } from '@nestjs/common';
 import { Response } from 'express';
 import * as path from 'path';
 import * as fs from 'fs';
@@ -11,12 +11,9 @@ export class DownloadController {
     ){}
 
   @Get('download')
-  async downloadFile(
-    @Res() res: Response,
-    outputFileName: string,
-    ) {
+  async downloadFile(@Res() res: Response) {
     try {
-        //const outputFileName = await this.editorService.getSharedData();
+        const outputFileName = await this.editorService.getSharedData();
         //filepath is server's ./videos/${outputFileName}.mp4
         const filePath = path.join(__dirname, '..', '..', 'videos', `${outputFileName}.mp4`);
         const stat = fs.statSync(filePath);
@@ -32,6 +29,6 @@ export class DownloadController {
         console.error(err);
         res.status(500).send('Internal Server Error');
         }
-    }
+    } 
 }
 

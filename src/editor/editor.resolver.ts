@@ -16,11 +16,19 @@ export class EditorResolver {
 
     @Mutation()
     async processVideo(
-        @Args('user_input') userInputs: InputOfOneVideo[],
-        outputFileName: string
+        @Args('user_input') userInputs: InputOfOneVideo[]
     ): Promise<any> {
-        //const outputFileName = `${uuid.v4()}`;
+        const outputFileName = uuid.v4();
+        await this.editorService.setSharedData(outputFileName);
         return await this.editorService.processVideo(userInputs, outputFileName);
     }
+
+    //최종 결과 영상 삭제
+    @Mutation()
+    async deleteOuputVideo(
+        @Args('output_filename') filename: string
+    ): Promise<any> {
+        return await this.editorService.deleteOutputVideo(filename);
+    }   
 
 }
