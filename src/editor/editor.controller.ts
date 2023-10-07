@@ -11,12 +11,9 @@ export class DownloadController {
     ){}
 
   @Get('download')
-  async downloadFile(
-    @Res() res: Response,
-    outputFileName: string,
-    ) {
+  async downloadFile(@Res() res: Response) {
     try {
-        //const outputFileName = await this.editorService.getSharedData();
+        const outputFileName = await this.editorService.getSharedData();
         //filepath is server's ./videos/${outputFileName}.mp4
         const filePath = path.join(__dirname, '..', '..', 'videos', `${outputFileName}.mp4`);
         const stat = fs.statSync(filePath);
