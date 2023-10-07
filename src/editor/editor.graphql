@@ -4,14 +4,6 @@ input InputOfOneVideo{
     endTime: String!
     }
 
- input VideoInfos{
-    url: String!
-    videoId: String!
-    videoTitle: String!
-    startTime: Int!
-    endTime: Int!
-    }   
-
 
 type Query{
     helloWorld: String!
@@ -20,4 +12,7 @@ type Query{
 
 type Mutation{
     processVideo(user_input: [InputOfOneVideo]!): String!
-    }
+    deleteOuputVideo(output_filename: String!): String!
+}
+
+

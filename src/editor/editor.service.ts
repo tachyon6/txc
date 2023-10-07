@@ -3,6 +3,7 @@ import * as ytdl from 'ytdl-core';
 import * as fs from 'fs';
 import { InputOfOneVideo, VideoInfos } from './editor.interface';
 import * as ffmpeg from 'fluent-ffmpeg';
+import { PubSub } from 'graphql-subscriptions';
 
 
 
@@ -12,15 +13,19 @@ export class EditorService {
 
     async processVideo(userInputs: InputOfOneVideo[], fileName: string): Promise<any> {
         try{
+            //비디오 정보만 따로 저장(url, videoId, videoTitle, startTime, endTime, videoLength)
             const videoInfos: VideoInfos[] = [];
+            var order = 1;
             for(const input of userInputs){
                 const { url, startTime, endTime } = input;
                 const info = await ytdl.getInfo(url);
                 const videoTitle = info.videoDetails.title;
                 const videoId = info.videoDetails.videoId;
+                const videoLength = parseInt(info.videoDetails.lengthSeconds);
                 const startTimeInSecond = timeStampToSeconds(startTime);
                 const endTimeInSecond = timeStampToSeconds(endTime);
-                videoInfos.push({url, videoId, videoTitle, startTime: startTimeInSecond, endTime: endTimeInSecond});
+                videoInfos.push({url, videoId, videoTitle, startTime: startTimeInSecond, endTime: endTimeInSecond, videoLength, order});
+                order++;
             }
             console.log(videoInfos);
             //async download
@@ -31,17 +36,18 @@ export class EditorService {
             //await all download
             await Promise.all(downloadPromises);
 
-            //async cut
+            //async cut: 시작, 끝 시간에 맞춰 자르기
             const cutPromises = videoInfos.map(async (info: VideoInfos) => {
                 await this.cutVideo(info);
                 console.log(info.videoTitle + ' video cut successfully');
             });
-
             //await all cut
             await Promise.all(cutPromises);
 
+            //async merge: 잘라진 cutted video를 합치기
             await this.mergeVideos(videoInfos, fileName);
 
+            //원본 영상, cutted 영상 삭제
             await this.deleteVideos(videoInfos, fileName);
 
             return 'success';
@@ -55,7 +61,10 @@ export class EditorService {
     async downloadVideo(info: VideoInfos): Promise<any> {
         try{
             const{url, videoId, videoTitle, startTime, endTime} = info;
-            const videoStream = await ytdl(url);
+            const videoStream = await ytdl(url, {
+                quality: 'highest',
+                filter: 'audioandvideo',
+            });
             const outputStream = fs.createWriteStream(`./videos/${videoId}.mp4`);
 
             return new Promise<void>((resolve, reject) => {
@@ -79,18 +88,23 @@ export class EditorService {
 
     async cutVideo(info: VideoInfos): Promise<any> {
         try{
-            const{url, videoId, videoTitle, startTime, endTime} = info;
+            const pubSub = new PubSub();
+
+            const{url, videoId, videoTitle, startTime, endTime, videoLength, order} = info;
+            const duration = endTime - startTime;
             console.log('cutVideo() called');
             return new Promise<void>((resolve, reject) => {
                 ffmpeg(`./videos/${videoId}.mp4`)
-                    //set size to 640x360
-                    .size('640x360')
+                    .size('1920x1080')
                     .autopad()
-                    //set fps to 30
                     .fps(30)
                     .setStartTime(startTime)
-                    .setDuration(endTime - startTime)
+                    .setDuration(duration)
                     .output(`./videos/${startTime}-${endTime}-${videoId}_cutted.mp4`)
+                    .on('progress', (progress) => {
+                        console.log('Processing: ' + Math.floor(progress.percent/(duration/videoLength)) + '% done');
+                        pubSub.publish('progress', {progress: Math.floor(progress.percent/(duration/videoLength)), state: order});
+                    })
                     .on('end', () => {
                         console.log(videoId + ' video cut completed');
                         resolve();
@@ -106,30 +120,33 @@ export class EditorService {
         }
     }
 
-    async mergeVideos(videoInfos: VideoInfos[], fileName: string): Promise<any> {
+    async mergeVideos(infos: VideoInfos[], fileName: string): Promise<any> {
         try{
+            const pubSub = new PubSub();
+
             console.log('mergeVideos() called');
             console.log(fileName);
             return new Promise<void>(async (resolve, reject) => {
                 const mergedVideo = await ffmpeg();
-                for (const info of videoInfos) {
-                    console.log('for loop');
-                    const{url, videoId, videoTitle, startTime, endTime} = info;
-                    mergedVideo.input(`./videos/${startTime}-${endTime}-${videoId}_cutted.mp4`);
+                //save all audio 
+                for (const info of infos) {
+                    const { startTime, endTime, videoId } = info;
+                    mergedVideo.addInput(`./videos/${startTime}-${endTime}-${videoId}_cutted.mp4`);
                 }
-                const outputFileName = `./videos/${fileName}.mp4`;
-                
-                await mergedVideo
+                mergedVideo.mergeToFile(`./videos/${fileName}.mp4`)
+                    .on('progress', (progress) => {
+                        console.log('Processing: ' + Math.floor(progress.percent/2) + '% done');
+                        pubSub.publish('progress', {progress: Math.floor(progress.percent/2), state: 'merge'});
+                    })
                     .on('end', () => {
-                        console.log('Merged videos');
+                        console.log('mergeVideos() completed');
                         resolve();
                     })
-                    .on('error', (error) => {
-                        console.log('mergeVideos() error', error);
-                        reject(error);
-                    })
-                    .mergeToFile(outputFileName);
-            });
+                    .on('error', (err) => {
+                        console.log('mergeVideos() error', err);
+                        reject(err);
+                    });
+            });        
         } catch(err){
             throw err;
         }
@@ -159,19 +176,27 @@ export class EditorService {
             });
 
             await Promise.all(deletePromises);
-
-            // fs.unlink(`./videos/${fileName}.mp4`, (err) => {
-            //     if (err) {
-            //         console.log('deleteVideos() error', err);
-            //         throw err;
-            //     }
-            //     console.log(`./videos/${fileName}.mp4 was deleted`);
-            // });
             
         } catch(err){
             throw err;
         }
     }
+
+    async deleteOutputVideo(fileName: string): Promise<any> {
+        try{
+            fs.unlink(`./videos/${fileName}.mp4`, (err) => {
+                if (err) {
+                    console.log('deleteVideos() error', err);
+                    throw err;
+                }
+                console.log(`./videos/${fileName}.mp4 was deleted`);
+            });
+            return 'output video deleted successfully';
+        } catch(err){
+            throw err;
+        }
+    }
+
 
 
 

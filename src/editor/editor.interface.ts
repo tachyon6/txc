@@ -11,4 +11,6 @@ export interface VideoInfos{
     videoTitle: string;
     startTime: number;
     endTime: number;
+    videoLength: number;
+    order: number;
 }
