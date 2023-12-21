@@ -128,7 +128,6 @@ export class EditorService {
             console.log(fileName);
             return new Promise<void>(async (resolve, reject) => {
                 const mergedVideo = await ffmpeg();
-                //save all audio 
                 for (const info of infos) {
                     const { startTime, endTime, videoId } = info;
                     mergedVideo.addInput(`./videos/${startTime}-${endTime}-${videoId}_cutted.mp4`);
