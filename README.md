@@ -24,7 +24,7 @@
 
 ## Description
 
-[Nest](https://github.com/nestjs/nest) framework TypeScript starter repository.
+Text Cut : 텍스트 기반(영상 다운로드 url, timeline) 영상 편집 로직
 
 ## Installation
 
